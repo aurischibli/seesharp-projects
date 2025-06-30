@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Giveaway Drawer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8F5F2; /* Light beige background */
+            color: #373A3C; /* Dark grey text */
+        }
+        .brand-accent {
+            color: #B0A08D;
+        }
+        .brand-border {
+            border-color: #D1C4B3;
+        }
+        .brand-bg {
+            background-color: #D1C4B3;
+            color: #373A3C;
+        }
+        .brand-bg:hover {
+            background-color: #C1B2A1;
+        }
+        .winner-display {
+            font-weight: 900;
+            font-size: 4rem;
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            transition: filter 0.2s, opacity 0.2s;
+        }
+        .blurry-text {
+            filter: blur(8px);
+            opacity: 0.6;
+        }
+        .winner-card {
+            background-color: #FFFFFF;
+            border: 1px solid #EAEAEA;
+        }
+        .confetti-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+        }
+        textarea {
+             background-color: #FFFFFF;
+             color: #373A3C;
+        }
+        textarea::placeholder {
+            color: #9ca3af;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <canvas id="confetti-canvas" class="confetti-canvas"></canvas>
+
+    <!-- Screen 1: Entry Form -->
+    <div id="entry-screen" class="min-h-screen flex flex-col items-center justify-center p-4">
+        <div class="w-full max-w-2xl mx-auto">
+            <header class="text-center mb-8">
+                <h1 class="text-4xl md:text-5xl font-bold tracking-tight">
+                    Giveaway Setup
+                </h1>
+                <p class="text-gray-500 mt-2">Your privacy is important. Names are only used for the draw and not stored.</p>
+            </header>
+            <main>
+                <div class="mb-6">
+                    <label for="names-input" class="block text-sm font-medium text-gray-700 mb-2">Paste Names (one per line):</label>
+                    <textarea id="names-input" rows="10" class="w-full p-4 border-2 brand-border rounded-lg focus:ring-2 focus:ring-amber-800 focus:outline-none transition-shadow" placeholder="John Doe&#10;Jane Smith&#10;Peter Jones..."></textarea>
+                </div>
+                <button id="start-giveaway-btn" class="w-full py-4 px-6 text-lg font-bold brand-bg rounded-lg shadow-lg transform hover:scale-105 transition-transform duration-300">
+                    Start Giveaway
+                </button>
+                <div id="entry-error-message" class="text-center text-red-500 mt-4 font-semibold"></div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Screen 2: Giveaway Draw -->
+    <div id="giveaway-screen" class="min-h-screen hidden flex-col items-center justify-center p-4">
+        <div class="w-full max-w-2xl mx-auto">
+             <header class="text-center mb-8">
+                <h1 class="text-4xl md:text-5xl font-bold tracking-tight">
+                    Live Giveaway <span class="brand-accent">Draw</span>
+                </h1>
+                <p class="text-gray-500 mt-2">Good luck to all participants!</p>
+            </header>
+            <main>
+                <div id="winner-announcement" class="text-center mb-8 p-6 bg-white rounded-lg border-2 brand-border">
+                     <h2 id="prize-title" class="text-2xl font-bold brand-accent mb-4">WINNER</h2>
+                     <div id="winner-display" class="winner-display">Ready?</div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <button id="draw-1st" class="draw-button py-3 px-6 text-lg font-bold brand-bg rounded-lg shadow-lg transform hover:scale-105 transition-transform duration-300" data-place="1">
+                        Draw 1st Place
+                    </button>
+                    <button id="draw-2nd" class="draw-button py-3 px-6 text-lg font-bold brand-bg rounded-lg shadow-lg transform hover:scale-105 transition-transform duration-300" data-place="2">
+                        Draw 2nd Place
+                    </button>
+                    <button id="draw-3rd" class="draw-button py-3 px-6 text-lg font-bold brand-bg rounded-lg shadow-lg transform hover:scale-105 transition-transform duration-300" data-place="3">
+                        Draw 3rd Place
+                    </button>
+                </div>
+
+                <div class="mt-8">
+                    <h3 class="text-xl font-bold text-center mb-4 brand-accent">Winners</h3>
+                    <div id="winners-list" class="space-y-3">
+                         <!-- Winners will be appended here -->
+                    </div>
+                </div>
+                 <div id="draw-error-message" class="text-center text-red-500 mt-4 font-semibold"></div>
+                 <div class="text-center mt-8">
+                    <button id="reset-btn" class="py-2 px-4 text-sm font-semibold text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition">Start New Giveaway</button>
+                 </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // --- Confetti ---
+        const confettiCanvas = document.getElementById('confetti-canvas');
+        const confettiCtx = confettiCanvas.getContext('2d');
+        let confettiPieces = [];
+        const numberOfPieces = 200;
+        const colors = ['#D1C4B3', '#B0A08D', '#FFFFFF', '#EAEAEA'];
+
+        function resizeCanvas() {
+            confettiCanvas.width = window.innerWidth;
+            confettiCanvas.height = window.innerHeight;
+        }
+
+        function createConfetti() {
+            confettiPieces = [];
+            for (let i = 0; i < numberOfPieces; i++) {
+                confettiPieces.push({
+                    x: confettiCanvas.width / 2,
+                    y: confettiCanvas.height / 2,
+                    radius: Math.random() * 4 + 2,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    vx: (Math.random() - 0.5) * 25,
+                    vy: (Math.random() - 0.5) * 25,
+                    alpha: 1,
+                    decay: Math.random() * 0.015 + 0.005
+                });
+            }
+        }
+
+        function animateConfetti() {
+            if (confettiPieces.length === 0) return;
+            confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+            confettiPieces.forEach((piece, index) => {
+                piece.x += piece.vx;
+                piece.y += piece.vy;
+                piece.vy += 0.4; // gravity
+                piece.alpha -= piece.decay;
+
+                if (piece.alpha <= 0) {
+                    confettiPieces.splice(index, 1);
+                } else {
+                    confettiCtx.globalAlpha = piece.alpha;
+                    confettiCtx.beginPath();
+                    confettiCtx.arc(piece.x, piece.y, piece.radius, 0, Math.PI * 2, false);
+                    confettiCtx.fillStyle = piece.color;
+                    confettiCtx.fill();
+                }
+            });
+            if (confettiPieces.length > 0) {
+                 requestAnimationFrame(animateConfetti);
+            } else {
+                 confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+            }
+        }
+
+        // --- Giveaway Logic ---
+        const entryScreen = document.getElementById('entry-screen');
+        const giveawayScreen = document.getElementById('giveaway-screen');
+        const startGiveawayBtn = document.getElementById('start-giveaway-btn');
+        const namesInput = document.getElementById('names-input');
+        const winnerDisplay = document.getElementById('winner-display');
+        const prizeTitle = document.getElementById('prize-title');
+        const winnersList = document.getElementById('winners-list');
+        const entryErrorMessage = document.getElementById('entry-error-message');
+        const drawErrorMessage = document.getElementById('draw-error-message');
+        const drawButtons = document.querySelectorAll('.draw-button');
+        const resetBtn = document.getElementById('reset-btn');
+
+        let allParticipants = [];
+        let winners = {};
+
+        function getAvailableParticipants() {
+            const drawnWinners = Object.values(winners).map(w => w.name);
+            return allParticipants.filter(name => !drawnWinners.includes(name));
+        }
+
+        function drawWinner(place) {
+            let availableParticipants = getAvailableParticipants();
+            drawErrorMessage.textContent = '';
+            
+            if (availableParticipants.length === 0) {
+                drawErrorMessage.textContent = 'Not enough participants to draw a winner.';
+                return;
+            }
+
+            drawButtons.forEach(btn => btn.disabled = true);
+            
+            const placeText = {1: '1st Place', 2: '2nd Place', 3: '3rd Place'}[place];
+            prizeTitle.textContent = `DRAWING ${placeText.toUpperCase()} WINNER...`;
+            winnerDisplay.classList.add('blurry-text');
+
+            let shuffleInterval;
+            let shuffleCount = 0;
+            const totalShuffles = 40; // More shuffles for more suspense
+            const shuffleDuration = 100;
+
+            shuffleInterval = setInterval(() => {
+                shuffleCount++;
+                const randomIndex = Math.floor(Math.random() * availableParticipants.length);
+                const randomName = availableParticipants[randomIndex];
+                winnerDisplay.textContent = randomName;
+                
+                if (shuffleCount >= totalShuffles) {
+                    clearInterval(shuffleInterval);
+                    const winnerIndex = Math.floor(Math.random() * availableParticipants.length);
+                    const winner = availableParticipants[winnerIndex];
+                    
+                    winnerDisplay.textContent = winner;
+                    winnerDisplay.classList.remove('blurry-text');
+
+                    winners[place] = { name: winner, placeText: placeText };
+                    updateWinnersList();
+                    createConfetti();
+                    animateConfetti();
+                    
+                    drawButtons.forEach(btn => {
+                       if (!winners[btn.dataset.place]) {
+                           btn.disabled = false;
+                       }
+                    });
+                    
+                    document.querySelector(`.draw-button[data-place='${place}']`).disabled = true;
+                    prizeTitle.textContent = `${placeText} WINNER!`;
+                }
+            }, shuffleDuration);
+        }
+
+        function updateWinnersList() {
+            winnersList.innerHTML = '';
+            const sortedPlaces = Object.keys(winners).sort((a,b) => a-b);
+            const trophies = {1: '🥇', 2: '🥈', 3: '🥉'};
+
+            sortedPlaces.forEach(place => {
+                const winner = winners[place];
+                const winnerElement = document.createElement('div');
+                winnerElement.className = 'winner-card p-4 rounded-lg flex items-center justify-between shadow';
+                winnerElement.innerHTML = `
+                    <div class="flex items-center">
+                        <span class="text-2xl mr-4">${trophies[place]}</span>
+                        <div>
+                            <span class="text-lg font-bold text-gray-800">${winner.placeText}</span>
+                            <p class="text-md text-gray-600">${winner.name}</p>
+                        </div>
+                    </div>
+                    <span class="text-sm font-bold brand-bg text-gray-800 py-1 px-3 rounded-full">WINNER</span>
+                `;
+                winnersList.appendChild(winnerElement);
+            });
+        }
+        
+        startGiveawayBtn.addEventListener('click', () => {
+            const names = namesInput.value.split('\n').map(name => name.trim()).filter(name => name);
+            if (names.length < 3) {
+                 entryErrorMessage.textContent = 'Please enter at least 3 unique names to start the giveaway.';
+                 return;
+            }
+            allParticipants = [...new Set(names)]; // Ensure unique names
+             if (allParticipants.length < 3) {
+                 entryErrorMessage.textContent = 'Please enter at least 3 unique names to start the giveaway.';
+                 return;
+            }
+            
+            entryErrorMessage.textContent = '';
+            entryScreen.classList.add('hidden');
+            giveawayScreen.classList.remove('hidden');
+            giveawayScreen.classList.add('flex');
+        });
+        
+        resetBtn.addEventListener('click', () => {
+            // Reset all state
+            allParticipants = [];
+            winners = {};
+            namesInput.value = '';
+            winnersList.innerHTML = '';
+            winnerDisplay.textContent = 'Ready?';
+            prizeTitle.textContent = 'WINNER';
+            drawErrorMessage.textContent = '';
+            entryErrorMessage.textContent = '';
+            drawButtons.forEach(btn => btn.disabled = false);
+
+            // Go back to entry screen
+            giveawayScreen.classList.add('hidden');
+            giveawayScreen.classList.remove('flex');
+            entryScreen.classList.remove('hidden');
+        });
+
+        drawButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                const place = e.target.dataset.place;
+                drawWinner(place);
+            });
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('load', () => {
+            resizeCanvas();
+        });
+    </script>
+</body>
+</html>
